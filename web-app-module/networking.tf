@@ -13,14 +13,38 @@ resource "aws_security_group" "instances" {
   name = "${var.app_name}-${var.environment_name}-instance-security-group"
 }
 
-resource "aws_security_group_rule" "allow_http_inbound" {
+# This is just a simple trick to get my ip 
+data "http" "ip" {
+  url = "https://ifconfig.me/ip"
+}
+
+resource "aws_security_group_rule" "allow_all_inbound_from_my_ip" {
   type              = "ingress"
   security_group_id = aws_security_group.instances.id
 
-  from_port   = 8080
-  to_port     = 8080
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
+  # from_port   = 8080
+  # to_port     = 8080
+  # protocol    = "tcp"
+  # cidr_blocks = ["0.0.0.0/0"]
+
+  from_port = 0
+  to_port   = 0
+  protocol  = "-1"
+  # cidr_blocks = ["0.0.0.0/0"]
+  cidr_blocks = ["${chomp(data.http.ip.response_body)}/32"]
+}
+
+resource "aws_security_group_rule" "allow_http_from_alb" {
+  type              = "ingress"
+  security_group_id = aws_security_group.instances.id
+
+
+  from_port = 80
+  to_port   = 80
+  protocol  = "tcp"
+  # cidr_blocks = ["0.0.0.0/0"]
+  # cidr_blocks = ["${chomp(data.http.ip.response_body)}/32"]
+  source_security_group_id = aws_security_group.alb.id
 }
 
 resource "aws_security_group_rule" "allow_all_outbound" {
@@ -54,7 +78,7 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_lb_target_group" "instances" {
   name     = "${var.app_name}-${var.environment_name}-tg"
-  port     = 8080
+  port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default_vpc.id
 
@@ -72,13 +96,13 @@ resource "aws_lb_target_group" "instances" {
 resource "aws_lb_target_group_attachment" "instance_1" {
   target_group_arn = aws_lb_target_group.instances.arn
   target_id        = aws_instance.instance_1.id
-  port             = 8080
+  port             = 80
 }
 
 resource "aws_lb_target_group_attachment" "instance_2" {
   target_group_arn = aws_lb_target_group.instances.arn
   target_id        = aws_instance.instance_2.id
-  port             = 8080
+  port             = 80
 }
 
 resource "aws_lb_listener_rule" "instances" {
